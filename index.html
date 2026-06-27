@@ -178,6 +178,36 @@
   canvas#fx{position:fixed;inset:0;z-index:49;pointer-events:none;display:none;}
   canvas#fx.on{display:block;}
 
+  /* バックアップ */
+  .backup{background:#fff;border:1px solid var(--line);border-radius:18px;
+    box-shadow:var(--shadow);padding:4px 0 0;margin-top:16px;overflow:hidden;}
+  .backup-head{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 18px;cursor:pointer;user-select:none;}
+  .bk-ttl{font-size:14px;letter-spacing:.14em;font-weight:700;color:var(--red-deep);}
+  .bk-toggle{font-size:11.5px;color:var(--ink-soft);letter-spacing:.08em;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+  .backup-body{display:none;padding:0 18px 20px;}
+  .backup-body.open{display:block;}
+  .bk-lead{font-size:11.5px;color:var(--ink-soft);line-height:1.7;letter-spacing:.03em;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;margin:0 0 16px;}
+  .bk-block{border-top:1px dashed var(--line);padding-top:14px;margin-top:14px;}
+  .bk-block:first-of-type{border-top:none;padding-top:0;margin-top:0;}
+  .bk-label{font-size:12.5px;font-weight:700;letter-spacing:.08em;margin-bottom:10px;color:var(--ink);}
+  .bk-btnrow{display:flex;gap:8px;flex-wrap:wrap;}
+  .bk-btn{flex:1;min-width:120px;background:var(--red);color:#fff;border:none;border-radius:11px;
+    padding:12px 8px;font-size:13px;font-weight:700;letter-spacing:.06em;cursor:pointer;
+    font-family:inherit;box-shadow:0 4px 12px rgba(176,24,40,.25);}
+  .bk-btn:active{transform:scale(.97);}
+  .bk-btn.ghost{background:#fff;color:var(--red-deep);border:1.5px solid var(--red);box-shadow:none;}
+  .bk-btn.full{flex:none;width:100%;margin-top:8px;}
+  .bk-paste{width:100%;margin-top:10px;min-height:60px;border:1px solid var(--line);border-radius:10px;
+    padding:10px;font-size:12px;font-family:"Hiragino Kaku Gothic ProN",monospace;color:var(--ink);
+    background:var(--paper);resize:vertical;box-sizing:border-box;}
+  .bk-note{font-size:11px;color:var(--ink-soft);letter-spacing:.04em;margin-top:8px;min-height:14px;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.5;}
+  .bk-note.ok{color:#1f7a3d;}
+  .bk-note.warn{color:var(--red);}
+
   .footer-note{text-align:center;font-size:10.5px;color:var(--ink-soft);opacity:.8;letter-spacing:.08em;
     margin-top:18px;font-family:"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.7;}
 </style>
@@ -238,6 +268,36 @@
     <div class="grid" id="calGrid"></div>
     <div class="cal-foot" id="calFoot">通った日は赤いしるしがつきます</div>
     <div class="cal-hint">日付をタップすると、後からでも記録できます</div>
+  </section>
+
+  <section class="backup">
+    <div class="backup-head" id="backupHead">
+      <span class="bk-ttl">📦 バックアップ・復元</span>
+      <span class="bk-toggle" id="bkToggle">ひらく ▾</span>
+    </div>
+    <div class="backup-body" id="backupBody">
+      <p class="bk-lead">記録はこのiPhoneの中だけに保存されています。機種変更やデータ消去に備えて、ときどき控えを残しておくと安心です。</p>
+
+      <div class="bk-block">
+        <div class="bk-label">記録を控える（バックアップ）</div>
+        <div class="bk-btnrow">
+          <button class="bk-btn" id="btnExportFile">ファイルに書き出す</button>
+          <button class="bk-btn" id="btnCopy">コピーする</button>
+        </div>
+        <div class="bk-note" id="bkSaveNote"></div>
+      </div>
+
+      <div class="bk-block">
+        <div class="bk-label">控えから戻す（復元）</div>
+        <div class="bk-btnrow">
+          <button class="bk-btn ghost" id="btnImportFile">ファイルを読み込む</button>
+        </div>
+        <textarea class="bk-paste" id="pasteArea" placeholder="コピーした控えをここに貼り付けて、下のボタンを押してください"></textarea>
+        <button class="bk-btn ghost full" id="btnImportPaste">貼り付けた控えから復元する</button>
+        <div class="bk-note" id="bkLoadNote"></div>
+      </div>
+      <input type="file" id="fileInput" accept=".json,application/json,text/plain" style="display:none;">
+    </div>
   </section>
 
   <div class="footer-note">
@@ -453,6 +513,100 @@ function confetti(){
     });
     if(elapsed<2600){raf=requestAnimationFrame(loop);}else{ctx.clearRect(0,0,cv.width,cv.height);cv.classList.remove("on");}
   })(start);
+}
+
+/* ---- バックアップ・復元 ---- */
+const APP_VERSION="gym-techo-1";
+function buildBackup(){
+  return JSON.stringify({app:APP_VERSION,exportedAt:new Date().toISOString(),fee:FEE,records:DATA});
+}
+function parseBackup(text){
+  const obj=JSON.parse(text);
+  // 旧形式（recordsキーなしで直接日付）も一応受ける
+  if(obj && obj.records && typeof obj.records==="object") return obj.records;
+  if(obj && typeof obj==="object" && !obj.app) return obj;
+  throw new Error("形式が違います");
+}
+function applyRestore(records){
+  const days=Object.keys(records).length;
+  if(!confirm(`控えから ${days} 日分の記録を復元します。\n今この端末にある記録は、控えの内容で置きかえられます。よろしいですか？`)){
+    return false;
+  }
+  DATA=records;saveAll(DATA);
+  refreshStamps();renderLedger();renderCalendar();
+  return true;
+}
+
+// 開閉
+const backupBody=document.getElementById("backupBody");
+document.getElementById("backupHead").addEventListener("click",()=>{
+  const open=backupBody.classList.toggle("open");
+  document.getElementById("bkToggle").textContent=open?"とじる ▴":"ひらく ▾";
+});
+
+// ファイル書き出し
+document.getElementById("btnExportFile").addEventListener("click",()=>{
+  const blob=new Blob([buildBackup()],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  const d=new Date();
+  const stamp=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  a.href=url;a.download=`gym-techo-backup-${stamp}.json`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+  setNote("bkSaveNote","ok","控えファイルを書き出しました。ファイルアプリやiCloudに保存してください。");
+});
+
+// コピー
+document.getElementById("btnCopy").addEventListener("click",async()=>{
+  const text=buildBackup();
+  try{
+    await navigator.clipboard.writeText(text);
+    setNote("bkSaveNote","ok","控えをコピーしました。メモやLINEの自分宛てに貼って保管してください。");
+  }catch(e){
+    // フォールバック：貼り付け欄に出して手動コピー
+    document.getElementById("pasteArea").value=text;
+    setNote("bkSaveNote","warn","自動コピーできませんでした。下の欄に控えを表示したので、長押しして全選択→コピーしてください。");
+  }
+});
+
+// ファイル読み込み
+const fileInput=document.getElementById("fileInput");
+document.getElementById("btnImportFile").addEventListener("click",()=>fileInput.click());
+fileInput.addEventListener("change",e=>{
+  const f=e.target.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const recs=parseBackup(reader.result);
+      if(applyRestore(recs)) setNote("bkLoadNote","ok","ファイルから記録を復元しました。");
+    }catch(err){
+      setNote("bkLoadNote","warn","このファイルは読み込めませんでした。正しい控えファイルか確認してください。");
+    }
+    fileInput.value="";
+  };
+  reader.readAsText(f);
+});
+
+// 貼り付けから復元
+document.getElementById("btnImportPaste").addEventListener("click",()=>{
+  const text=document.getElementById("pasteArea").value.trim();
+  if(!text){setNote("bkLoadNote","warn","復元する控えを貼り付けてください。");return;}
+  try{
+    const recs=parseBackup(text);
+    if(applyRestore(recs)){
+      setNote("bkLoadNote","ok","貼り付けた控えから記録を復元しました。");
+      document.getElementById("pasteArea").value="";
+    }
+  }catch(err){
+    setNote("bkLoadNote","warn","貼り付けた内容を読み取れませんでした。控え全体がそろっているか確認してください。");
+  }
+});
+
+function setNote(id,cls,msg){
+  const el=document.getElementById(id);
+  el.className="bk-note "+(cls||"");
+  el.textContent=msg;
 }
 
 (function boot(){
