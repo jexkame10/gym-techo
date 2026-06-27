@@ -84,9 +84,15 @@
   /* 通帳 */
   .ledger{background:#fff;border:1px solid var(--line);border-radius:18px;
     box-shadow:var(--shadow);padding:18px 18px 20px;margin-bottom:16px;}
-  .ledger-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
-  .ledger-head .m{font-size:13px;letter-spacing:.2em;color:var(--ink-soft);
-    font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+  .ledger-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+  .ledger-head .navbtn{background:var(--paper);border:1px solid var(--line);border-radius:9px;
+    width:38px;height:34px;font-size:16px;color:var(--red-deep);cursor:pointer;flex:none;}
+  .ledger-head .navbtn:active{background:var(--paper-deep);}
+  .ledger-head .navbtn:disabled{opacity:.3;cursor:default;}
+  .ledger-head .m{font-size:15px;letter-spacing:.18em;font-weight:700;color:var(--red-deep);
+    font-family:"Hiragino Mincho ProN",serif;text-align:center;flex:1;}
+  .ledger-thismonth{text-align:center;font-size:10.5px;color:var(--gold);letter-spacing:.1em;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;margin-bottom:6px;min-height:13px;}
   .count-row{display:flex;align-items:flex-end;gap:8px;justify-content:center;padding:6px 0 2px;}
   .count-row .num{font-size:74px;line-height:.85;font-weight:700;color:var(--red-deep);letter-spacing:.02em;}
   .count-row .unit{font-size:20px;margin-bottom:8px;letter-spacing:.1em;color:var(--ink);}
@@ -178,6 +184,18 @@
   canvas#fx{position:fixed;inset:0;z-index:49;pointer-events:none;display:none;}
   canvas#fx.on{display:block;}
 
+  /* 折れ線グラフ */
+  .trend{background:#fff;border:1px solid var(--line);border-radius:18px;
+    box-shadow:var(--shadow);padding:18px 16px 16px;margin-top:16px;}
+  .trend-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px;}
+  .trend-ttl{font-size:14px;letter-spacing:.12em;font-weight:700;color:var(--red-deep);}
+  .trend-sub{font-size:11px;color:var(--ink-soft);letter-spacing:.06em;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+  .trend-chart{width:100%;}
+  .trend-chart svg{width:100%;height:auto;display:block;}
+  .trend-empty{text-align:center;font-size:12px;color:var(--ink-soft);padding:24px 0;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;letter-spacing:.05em;}
+
   /* バックアップ */
   .backup{background:#fff;border:1px solid var(--line);border-radius:18px;
     box-shadow:var(--shadow);padding:4px 0 0;margin-top:16px;overflow:hidden;}
@@ -239,9 +257,14 @@
   </section>
 
   <section class="ledger">
-    <div class="ledger-head"><span class="m" id="ledgerMonth">--</span></div>
+    <div class="ledger-head">
+      <button class="navbtn" id="ledgerPrev">‹</button>
+      <span class="m" id="ledgerMonth">--</span>
+      <button class="navbtn" id="ledgerNext">›</button>
+    </div>
+    <div class="ledger-thismonth" id="ledgerThisMonth"></div>
     <div class="count-row"><span class="num" id="monthCount">0</span><span class="unit">回</span></div>
-    <div class="count-cap">今 月 の 来 館</div>
+    <div class="count-cap" id="countCap">こ の 月 の 来 館</div>
     <div class="breakdown">
       <div class="bd-cell"><span class="e">💪</span><span class="n" id="bdKintore">0</span><span class="l">筋トレ</span></div>
       <div class="bd-cell"><span class="e">🎵</span><span class="n" id="bdLesson">0</span><span class="l">レッスン</span></div>
@@ -268,6 +291,17 @@
     <div class="grid" id="calGrid"></div>
     <div class="cal-foot" id="calFoot">通った日は赤いしるしがつきます</div>
     <div class="cal-hint">日付をタップすると、後からでも記録できます</div>
+  </section>
+
+  <section class="trend">
+    <div class="trend-head">
+      <span class="trend-ttl">📈 来館回数のうつりかわり</span>
+      <span class="trend-sub" id="trendSub">直近6か月</span>
+    </div>
+    <div class="trend-chart" id="trendChart">
+      <svg id="trendSvg" viewBox="0 0 320 160" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="trend-empty" id="trendEmpty" style="display:none;">記録がたまると、ここに推移が出ます</div>
   </section>
 
   <section class="backup">
@@ -376,20 +410,27 @@ grid.addEventListener("click",e=>{
   const wasEmpty=Object.keys(DATA[today]).length===0;
   if(DATA[today][k]){delete DATA[today][k];if(!Object.keys(DATA[today]).length)delete DATA[today];}
   else{DATA[today][k]=true;}
-  saveAll(DATA);refreshStamps();renderLedger();renderCalendar();
+  saveAll(DATA);refreshStamps();renderLedger();renderCalendar();renderTrend();
   if(wasEmpty&&DATA[today]&&DATA[today][k])celebrate();
 });
 document.getElementById("undoBtn").addEventListener("click",()=>{
-  delete DATA[todayKey()];saveAll(DATA);refreshStamps();renderLedger();renderCalendar();
+  delete DATA[todayKey()];saveAll(DATA);refreshStamps();renderLedger();renderCalendar();renderTrend();
 });
 
 function monthRecords(y,m){const p=`${y}-${String(m+1).padStart(2,"0")}-`;return Object.entries(DATA).filter(([k])=>k.startsWith(p));}
+
+// 回数パネルが表示している年月（カレンダーとは独立）
+let ledgerY,ledgerMo;
+(function(){const d=new Date();ledgerY=d.getFullYear();ledgerMo=d.getMonth();})();
+
 function renderLedger(){
-  const d=new Date(),y=d.getFullYear(),m=d.getMonth();
-  const recs=monthRecords(y,m);const visits=recs.length;
+  const now=new Date();
+  const isThisMonth=(ledgerY===now.getFullYear()&&ledgerMo===now.getMonth());
+  const recs=monthRecords(ledgerY,ledgerMo);const visits=recs.length;
   const counts={kintore:0,lesson:0,hotyoga:0,pool:0,sauna:0};
   recs.forEach(([,v])=>KEYS.forEach(k=>{if(v[k])counts[k]++;}));
-  document.getElementById("ledgerMonth").textContent=`${y}年 ${m+1}月`;
+  document.getElementById("ledgerMonth").textContent=`${ledgerY}年 ${ledgerMo+1}月`;
+  document.getElementById("ledgerThisMonth").textContent=isThisMonth?"● 今月":"";
   document.getElementById("monthCount").textContent=visits;
   document.getElementById("bdKintore").textContent=counts.kintore;
   document.getElementById("bdLesson").textContent=counts.lesson;
@@ -397,9 +438,19 @@ function renderLedger(){
   document.getElementById("bdPool").textContent=counts.pool;
   document.getElementById("bdSauna").textContent=counts.sauna;
   const up=document.getElementById("unitPrice"),per=document.getElementById("unitPer");
-  if(visits>0){up.textContent=Math.round(FEE/visits).toLocaleString();per.textContent=`今月 ${visits} 回 ÷ 15,840円`;}
-  else{up.textContent="—";per.textContent="まだ記録がありません";}
+  if(visits>0){up.textContent=Math.round(FEE/visits).toLocaleString();per.textContent=`${ledgerMo+1}月 ${visits} 回 ÷ 15,840円`;}
+  else{up.textContent="—";per.textContent="この月は記録がありません";}
+  // 未来の月へは進めないように
+  document.getElementById("ledgerNext").disabled=isThisMonth;
 }
+document.getElementById("ledgerPrev").addEventListener("click",()=>{
+  ledgerMo--;if(ledgerMo<0){ledgerMo=11;ledgerY--;}renderLedger();
+});
+document.getElementById("ledgerNext").addEventListener("click",()=>{
+  const now=new Date();
+  if(ledgerY===now.getFullYear()&&ledgerMo===now.getMonth())return;
+  ledgerMo++;if(ledgerMo>11){ledgerMo=0;ledgerY++;}renderLedger();
+});
 
 function renderCalendar(){
   const g=document.getElementById("calGrid");g.innerHTML="";
@@ -462,13 +513,13 @@ sheetGrid.addEventListener("click",e=>{
   if(DATA[editDate][k]){delete DATA[editDate][k];if(!Object.keys(DATA[editDate]).length)delete DATA[editDate];}
   else{DATA[editDate][k]=true;}
   el.classList.toggle("on");
-  saveAll(DATA);refreshStamps();renderLedger();renderCalendar();
+  saveAll(DATA);refreshStamps();renderLedger();renderCalendar();renderTrend();
 });
 document.getElementById("sheetClear").addEventListener("click",()=>{
   if(!editDate)return;
   delete DATA[editDate];saveAll(DATA);
   sheetGrid.querySelectorAll(".sheet-stamp").forEach(el=>el.classList.remove("on"));
-  refreshStamps();renderLedger();renderCalendar();
+  refreshStamps();renderLedger();renderCalendar();renderTrend();
 });
 
 /* ---- お祝い ---- */
@@ -533,7 +584,7 @@ function applyRestore(records){
     return false;
   }
   DATA=records;saveAll(DATA);
-  refreshStamps();renderLedger();renderCalendar();
+  refreshStamps();renderLedger();renderCalendar();renderTrend();
   return true;
 }
 
@@ -609,10 +660,57 @@ function setNote(id,cls,msg){
   el.textContent=msg;
 }
 
+/* ---- 来館回数の折れ線グラフ（直近6か月） ---- */
+function renderTrend(){
+  const svg=document.getElementById("trendSvg");
+  const now=new Date();
+  // 直近6か月の配列を作る（古い→新しい）
+  const months=[];
+  for(let i=5;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    months.push({y:d.getFullYear(),m:d.getMonth(),
+      visits:monthRecords(d.getFullYear(),d.getMonth()).length});
+  }
+  const total=months.reduce((s,x)=>s+x.visits,0);
+  const empty=document.getElementById("trendEmpty");
+  if(total===0){svg.innerHTML="";empty.style.display="block";return;}
+  empty.style.display="none";
+
+  const W=320,H=160,padL=24,padR=12,padT=14,padB=26;
+  const plotW=W-padL-padR, plotH=H-padT-padB;
+  const maxV=Math.max(4,...months.map(x=>x.visits)); // 最低でも目盛り4まで
+  const stepX=plotW/(months.length-1);
+  const x=i=>padL+stepX*i;
+  const y=v=>padT+plotH-(v/maxV)*plotH;
+
+  let g="";
+  // 横グリッド線（0, 中間, max）
+  const gridVals=[0,Math.round(maxV/2),maxV];
+  gridVals.forEach(gv=>{
+    const yy=y(gv);
+    g+=`<line x1="${padL}" y1="${yy}" x2="${W-padR}" y2="${yy}" stroke="var(--line)" stroke-width="1"/>`;
+    g+=`<text x="${padL-6}" y="${yy+3}" text-anchor="end" font-size="9" fill="var(--ink-soft)" font-family="sans-serif">${gv}</text>`;
+  });
+  // 折れ線
+  const pts=months.map((mo,i)=>`${x(i)},${y(mo.visits)}`).join(" ");
+  // 面（うすい赤）
+  const areaPts=`${padL},${y(0)} ${pts} ${x(months.length-1)},${y(0)}`;
+  g+=`<polygon points="${areaPts}" fill="rgba(176,24,40,.08)"/>`;
+  g+=`<polyline points="${pts}" fill="none" stroke="var(--red)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  // 各点と値・月ラベル
+  months.forEach((mo,i)=>{
+    const isLast=(i===months.length-1);
+    g+=`<circle cx="${x(i)}" cy="${y(mo.visits)}" r="${isLast?4:3}" fill="${isLast?'var(--red)':'#fff'}" stroke="var(--red)" stroke-width="2"/>`;
+    g+=`<text x="${x(i)}" y="${y(mo.visits)-8}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--red-deep)" font-family="sans-serif">${mo.visits}</text>`;
+    g+=`<text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="9" fill="var(--ink-soft)" font-family="sans-serif">${mo.m+1}月</text>`;
+  });
+  svg.innerHTML=g;
+}
+
 (function boot(){
   const d=new Date();
   document.getElementById("todayLabel").textContent=`${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`;
-  refreshStamps();renderLedger();renderCalendar();
+  refreshStamps();renderLedger();renderCalendar();renderTrend();renderTrend();
 })();
 </script>
 </body>
