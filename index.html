@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ジム通帳">
+<meta name="theme-color" content="#a81b2d">
+<title>ジム通帳</title>
+<style>
+  :root{
+    --red:#b01828;          /* ジェクサーの赤 */
+    --red-deep:#7d0f1c;     /* 深い臙脂 */
+    --red-bright:#d8202f;   /* 明るい赤 */
+    --ink:#2a1416;          /* 黒みの赤茶 */
+    --ink-soft:#7a5258;
+    --paper:#fbf4f3;        /* ほんのり赤みの生成り */
+    --paper-deep:#f3e4e3;
+    --gold:#c8a24a;
+    --line:#e6d3d2;
+    --shadow: 0 8px 24px rgba(125,15,28,.14);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+    background:
+      radial-gradient(120% 80% at 50% -10%, #fff8f7 0%, var(--paper) 45%, var(--paper-deep) 100%);
+    color:var(--ink);
+    min-height:100vh;min-height:100dvh;
+    padding:max(env(safe-area-inset-top),18px) 16px max(env(safe-area-inset-bottom),22px);
+    max-width:520px;margin:0 auto;position:relative;overflow-x:hidden;
+  }
+  .noren-top{text-align:center;margin-bottom:14px;}
+  .noren-top .brand{
+    display:inline-block;
+    background:linear-gradient(135deg,var(--red) 0%,var(--red-deep) 100%);
+    color:#fff;font-size:13px;letter-spacing:.45em;padding:7px 20px 7px 24px;
+    border-radius:3px;box-shadow:var(--shadow);
+  }
+  .noren-top h1{margin:12px 0 2px;font-size:29px;letter-spacing:.14em;font-weight:700;color:var(--red-deep);}
+  .noren-top .sub{font-size:11.5px;letter-spacing:.3em;color:var(--ink-soft);
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+
+  /* スタンプ場 */
+  .stamp-yard{
+    background:#fff;border:1px solid var(--line);border-radius:18px;
+    padding:18px 16px 20px;box-shadow:var(--shadow);margin-bottom:16px;position:relative;
+  }
+  .yard-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:14px;}
+  .yard-head .today{font-size:13px;letter-spacing:.12em;color:var(--ink-soft);
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+  .yard-head .ttl{font-size:15px;letter-spacing:.2em;font-weight:700;color:var(--red-deep);}
+  .stamp-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+  .stamp{
+    position:relative;border:2px dashed var(--line);border-radius:14px;
+    background:var(--paper);padding:16px 10px 13px;text-align:center;cursor:pointer;
+    transition:transform .12s ease,box-shadow .2s ease,border-color .2s;user-select:none;overflow:hidden;
+  }
+  .stamp:active{transform:scale(.95);}
+  .stamp .emoji{font-size:30px;line-height:1;display:block;margin-bottom:7px;filter:saturate(.95);}
+  .stamp .label{font-size:15px;letter-spacing:.12em;font-weight:700;}
+  .stamp .hint{font-size:10px;letter-spacing:.1em;color:var(--ink-soft);
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;margin-top:3px;display:block;min-height:13px;}
+  .stamp.done{
+    border-style:solid;border-color:var(--red);
+    background:radial-gradient(circle at 50% 38%,rgba(176,24,40,.10),rgba(176,24,40,.04) 60%,transparent 70%);
+  }
+  .stamp.done::after{
+    content:"済";position:absolute;top:7px;right:9px;width:26px;height:26px;line-height:24px;
+    border:2px solid var(--red);color:var(--red);border-radius:50%;font-size:13px;font-weight:700;
+    transform:rotate(-12deg);box-shadow:inset 0 0 0 1px rgba(176,24,40,.25);animation:pop .3s ease;
+  }
+  @keyframes pop{0%{transform:rotate(-12deg) scale(0);}70%{transform:rotate(-12deg) scale(1.25);}100%{transform:rotate(-12deg) scale(1);}}
+  .stamp.done .label{color:var(--red-deep);}
+  .yard-foot{margin-top:14px;text-align:center;}
+  .save-note{font-size:11px;color:var(--ink-soft);letter-spacing:.08em;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;min-height:15px;}
+  .undo{display:inline-block;margin-top:8px;font-size:11px;color:var(--ink-soft);
+    text-decoration:underline;cursor:pointer;font-family:"Hiragino Kaku Gothic ProN",sans-serif;
+    background:none;border:none;}
+
+  /* 通帳 */
+  .ledger{background:#fff;border:1px solid var(--line);border-radius:18px;
+    box-shadow:var(--shadow);padding:18px 18px 20px;margin-bottom:16px;}
+  .ledger-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+  .ledger-head .m{font-size:13px;letter-spacing:.2em;color:var(--ink-soft);
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+  .count-row{display:flex;align-items:flex-end;gap:8px;justify-content:center;padding:6px 0 2px;}
+  .count-row .num{font-size:74px;line-height:.85;font-weight:700;color:var(--red-deep);letter-spacing:.02em;}
+  .count-row .unit{font-size:20px;margin-bottom:8px;letter-spacing:.1em;color:var(--ink);}
+  .count-cap{text-align:center;font-size:12px;letter-spacing:.22em;color:var(--ink-soft);
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;margin-bottom:14px;}
+  .breakdown{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:16px;}
+  .bd-cell{background:var(--paper);border-radius:10px;padding:9px 2px 8px;text-align:center;border:1px solid var(--line);}
+  .bd-cell .e{font-size:18px;display:block;line-height:1;}
+  .bd-cell .n{font-size:19px;font-weight:700;display:block;margin-top:3px;line-height:1;color:var(--red-deep);}
+  .bd-cell .l{font-size:9px;letter-spacing:0;color:var(--ink-soft);
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;margin-top:3px;display:block;line-height:1.2;}
+  .unitprice{border-top:1px dashed var(--line);padding-top:14px;display:flex;align-items:center;justify-content:space-between;}
+  .unitprice .lab{font-size:12px;letter-spacing:.14em;color:var(--ink-soft);
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.5;}
+  .unitprice .val{text-align:right;}
+  .unitprice .val .big{font-size:30px;font-weight:700;color:var(--red);letter-spacing:.02em;}
+  .unitprice .val .yen{font-size:15px;}
+  .unitprice .val .per{font-size:10px;color:var(--ink-soft);display:block;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;letter-spacing:.1em;}
+
+  /* カレンダー */
+  .cal{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:18px 16px 20px;}
+  .cal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+  .cal-head .navbtn{background:var(--paper);border:1px solid var(--line);border-radius:9px;
+    width:38px;height:34px;font-size:16px;color:var(--red-deep);cursor:pointer;}
+  .cal-head .navbtn:active{background:var(--paper-deep);}
+  .cal-head .label{font-size:15px;letter-spacing:.18em;font-weight:700;color:var(--red-deep);}
+  .dow{display:grid;grid-template-columns:repeat(7,1fr);margin-bottom:6px;}
+  .dow span{text-align:center;font-size:10.5px;letter-spacing:.05em;color:var(--ink-soft);
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;padding-bottom:2px;}
+  .dow span.sun{color:var(--red);}
+  .dow span.sat{color:#2f6f9e;}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;}
+  .cell{aspect-ratio:1/1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    border-radius:10px;position:relative;cursor:pointer;transition:background .15s;}
+  .cell:not(.empty):active{background:var(--paper-deep);}
+  .cell .d{font-size:12px;color:var(--ink-soft);font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+  .cell.empty{visibility:hidden;cursor:default;}
+  .cell.today{outline:1.5px solid var(--gold);outline-offset:-1px;}
+  .cell.went{background:radial-gradient(circle at 50% 45%,rgba(176,24,40,.16),rgba(176,24,40,.05) 65%,transparent 72%);}
+  .cell.went .d{color:var(--red-deep);font-weight:700;}
+  .cell .mark{font-size:16px;line-height:1;margin-top:1px;height:16px;}
+  .cal-foot{margin-top:14px;text-align:center;font-size:11px;color:var(--ink-soft);
+    letter-spacing:.08em;font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+  .cal-hint{margin-top:4px;text-align:center;font-size:10.5px;color:var(--ink-soft);opacity:.85;
+    letter-spacing:.05em;font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+
+  /* 日付編集モーダル */
+  .sheet{position:fixed;inset:0;z-index:40;display:none;align-items:flex-end;justify-content:center;
+    background:rgba(42,20,22,.4);backdrop-filter:blur(2px);}
+  .sheet.on{display:flex;}
+  .sheet-card{background:var(--paper);width:100%;max-width:520px;border-radius:22px 22px 0 0;
+    padding:20px 18px max(env(safe-area-inset-bottom),20px);box-shadow:0 -10px 40px rgba(125,15,28,.3);
+    transform:translateY(100%);animation:sheetUp .3s cubic-bezier(.2,.9,.3,1) forwards;}
+  @keyframes sheetUp{to{transform:translateY(0);}}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+  .sheet-head .date{font-size:18px;font-weight:700;letter-spacing:.08em;color:var(--red-deep);}
+  .sheet-head .x{background:none;border:none;font-size:24px;color:var(--ink-soft);cursor:pointer;line-height:1;padding:4px 8px;}
+  .sheet-sub{font-size:11.5px;color:var(--ink-soft);letter-spacing:.05em;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;margin-bottom:14px;}
+  .sheet-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;}
+  .sheet-stamp{border:2px dashed var(--line);border-radius:13px;background:#fff;padding:13px 8px;
+    text-align:center;cursor:pointer;user-select:none;transition:transform .1s;}
+  .sheet-stamp:active{transform:scale(.95);}
+  .sheet-stamp .e{font-size:26px;display:block;line-height:1;margin-bottom:5px;}
+  .sheet-stamp .l{font-size:13px;font-weight:700;letter-spacing:.08em;}
+  .sheet-stamp.on{border-style:solid;border-color:var(--red);
+    background:radial-gradient(circle at 50% 40%,rgba(176,24,40,.10),transparent 70%);}
+  .sheet-stamp.on .l{color:var(--red-deep);}
+  .sheet-clear{display:block;margin:10px auto 0;background:none;border:none;color:var(--ink-soft);
+    font-size:12px;text-decoration:underline;cursor:pointer;font-family:"Hiragino Kaku Gothic ProN",sans-serif;}
+
+  /* お祝い */
+  .celebrate{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;
+    background:rgba(125,15,28,.32);backdrop-filter:blur(2px);}
+  .celebrate.on{display:flex;}
+  .praise{background:var(--paper);border-radius:22px;padding:30px 30px 26px;text-align:center;
+    box-shadow:0 20px 60px rgba(125,15,28,.4);border:2px solid var(--gold);
+    transform:scale(.7);opacity:0;animation:praiseIn .45s cubic-bezier(.2,1.3,.4,1) forwards;max-width:300px;}
+  @keyframes praiseIn{to{transform:scale(1);opacity:1;}}
+  .praise .big-emoji{font-size:54px;line-height:1;}
+  .praise .msg{font-size:22px;font-weight:700;letter-spacing:.08em;margin:14px 0 6px;color:var(--red-deep);}
+  .praise .sub{font-size:13px;color:var(--ink-soft);letter-spacing:.06em;
+    font-family:"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.7;}
+  .praise .closeb{margin-top:18px;background:var(--red);color:#fff;border:none;border-radius:30px;
+    padding:11px 30px;font-size:14px;letter-spacing:.18em;font-weight:700;cursor:pointer;
+    font-family:inherit;box-shadow:0 6px 16px rgba(176,24,40,.4);}
+  .praise .closeb:active{transform:scale(.96);}
+  canvas#fx{position:fixed;inset:0;z-index:49;pointer-events:none;display:none;}
+  canvas#fx.on{display:block;}
+
+  .footer-note{text-align:center;font-size:10.5px;color:var(--ink-soft);opacity:.8;letter-spacing:.08em;
+    margin-top:18px;font-family:"Hiragino Kaku Gothic ProN",sans-serif;line-height:1.7;}
+</style>
+</head>
+<body>
+
+  <div class="noren-top">
+    <span class="brand">ジ ム 通 帳</span>
+    <h1>今日もおつかれさま</h1>
+    <div class="sub">ジ ム 通 い の き ろ く</div>
+  </div>
+
+  <section class="stamp-yard">
+    <div class="yard-head">
+      <span class="ttl">今日のスタンプ</span>
+      <span class="today" id="todayLabel">--</span>
+    </div>
+    <div class="stamp-grid" id="stampGrid">
+      <div class="stamp" data-key="kintore"><span class="emoji">💪</span><span class="label">筋トレ</span><span class="hint"></span></div>
+      <div class="stamp" data-key="lesson"><span class="emoji">🎵</span><span class="label">レッスン</span><span class="hint"></span></div>
+      <div class="stamp" data-key="hotyoga"><span class="emoji">🧘</span><span class="label">ホットヨガ</span><span class="hint"></span></div>
+      <div class="stamp" data-key="pool"><span class="emoji">🏊</span><span class="label">プール</span><span class="hint"></span></div>
+      <div class="stamp" data-key="sauna"><span class="emoji">♨️</span><span class="label">大浴場・サウナ</span><span class="hint"></span></div>
+    </div>
+    <div class="yard-foot">
+      <div class="save-note" id="saveNote">押すと記録されます</div>
+      <button class="undo" id="undoBtn" style="display:none;">今日の記録を取り消す</button>
+    </div>
+  </section>
+
+  <section class="ledger">
+    <div class="ledger-head"><span class="m" id="ledgerMonth">--</span></div>
+    <div class="count-row"><span class="num" id="monthCount">0</span><span class="unit">回</span></div>
+    <div class="count-cap">今 月 の 来 館</div>
+    <div class="breakdown">
+      <div class="bd-cell"><span class="e">💪</span><span class="n" id="bdKintore">0</span><span class="l">筋トレ</span></div>
+      <div class="bd-cell"><span class="e">🎵</span><span class="n" id="bdLesson">0</span><span class="l">レッスン</span></div>
+      <div class="bd-cell"><span class="e">🧘</span><span class="n" id="bdHotyoga">0</span><span class="l">ホットヨガ</span></div>
+      <div class="bd-cell"><span class="e">🏊</span><span class="n" id="bdPool">0</span><span class="l">プール</span></div>
+      <div class="bd-cell"><span class="e">♨️</span><span class="n" id="bdSauna">0</span><span class="l">サウナ</span></div>
+    </div>
+    <div class="unitprice">
+      <span class="lab">月会費 15,840円<br>いまの1回あたり</span>
+      <span class="val"><span class="big" id="unitPrice">—</span><span class="yen"> 円</span>
+        <span class="per" id="unitPer">まだ記録がありません</span></span>
+    </div>
+  </section>
+
+  <section class="cal">
+    <div class="cal-head">
+      <button class="navbtn" id="prevM">‹</button>
+      <span class="label" id="calLabel">----年--月</span>
+      <button class="navbtn" id="nextM">›</button>
+    </div>
+    <div class="dow">
+      <span class="sun">日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span class="sat">土</span>
+    </div>
+    <div class="grid" id="calGrid"></div>
+    <div class="cal-foot" id="calFoot">通った日は赤いしるしがつきます</div>
+    <div class="cal-hint">日付をタップすると、後からでも記録できます</div>
+  </section>
+
+  <div class="footer-note">
+    記録はこのiPhoneの中だけに保存されます。<br>ホーム画面に追加するとアプリのように使えます。
+  </div>
+
+  <!-- 日付編集シート -->
+  <div class="sheet" id="sheet">
+    <div class="sheet-card" id="sheetCard">
+      <div class="sheet-head">
+        <span class="date" id="sheetDate">--</span>
+        <button class="x" id="sheetClose">×</button>
+      </div>
+      <div class="sheet-sub">この日にやったことを選んでください（複数OK）</div>
+      <div class="sheet-grid" id="sheetGrid">
+        <div class="sheet-stamp" data-key="kintore"><span class="e">💪</span><span class="l">筋トレ</span></div>
+        <div class="sheet-stamp" data-key="lesson"><span class="e">🎵</span><span class="l">レッスン</span></div>
+        <div class="sheet-stamp" data-key="hotyoga"><span class="e">🧘</span><span class="l">ホットヨガ</span></div>
+        <div class="sheet-stamp" data-key="pool"><span class="e">🏊</span><span class="l">プール</span></div>
+        <div class="sheet-stamp" data-key="sauna"><span class="e">♨️</span><span class="l">大浴場・サウナ</span></div>
+      </div>
+      <button class="sheet-clear" id="sheetClear">この日の記録を消す</button>
+    </div>
+  </div>
+
+  <div class="celebrate" id="celebrate">
+    <div class="praise" id="praiseBox">
+      <div class="big-emoji" id="praiseEmoji">🎉</div>
+      <div class="msg" id="praiseMsg">おつかれさま！</div>
+      <div class="sub" id="praiseSub">今日もよく頑張りました</div>
+      <button class="closeb" id="praiseClose">とじる</button>
+    </div>
+  </div>
+  <canvas id="fx"></canvas>
+
+<script>
+const STORE_KEY="gym_techo_records_v1";
+const FEE=15840;
+const KEYS=["kintore","lesson","hotyoga","pool","sauna"];
+
+function loadAll(){try{return JSON.parse(localStorage.getItem(STORE_KEY))||{};}catch(e){return {};}}
+function saveAll(d){localStorage.setItem(STORE_KEY,JSON.stringify(d));}
+function ymd(d){const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,"0"),day=String(d.getDate()).padStart(2,"0");return `${y}-${m}-${day}`;}
+function todayKey(){return ymd(new Date());}
+
+let DATA=loadAll();
+let viewYear,viewMonth;
+(function(){const d=new Date();viewYear=d.getFullYear();viewMonth=d.getMonth();})();
+
+const grid=document.getElementById("stampGrid");
+const praiseMsgs=[
+  ["🎉","おつかれさま！","今日もよく頑張りました"],
+  ["👏","ナイス、来館！","通ったあなたがえらい"],
+  ["♨️","ととのいましたか？","今日も一歩前進です"],
+  ["🌸","よく動きました","この積み重ねが効いてきます"],
+  ["🎈","お見事！","続けてる自分をほめてOK"],
+  ["💮","上出来です","行っただけで充分すごい"],
+  ["🍵","おつかれさまでした","ゆっくり休んでください"],
+  ["✨","きょうも来た！","未来の自分が喜んでます"]
+];
+
+function refreshStamps(){
+  const today=todayKey();const rec=DATA[today]||{};let any=false;
+  grid.querySelectorAll(".stamp").forEach(el=>{
+    const k=el.dataset.key;
+    if(rec[k]){el.classList.add("done");el.querySelector(".hint").textContent="押しました";any=true;}
+    else{el.classList.remove("done");el.querySelector(".hint").textContent="";}
+  });
+  document.getElementById("undoBtn").style.display=any?"inline-block":"none";
+  document.getElementById("saveNote").textContent=any?"今日はチェック済み":"押すと記録されます";
+}
+grid.addEventListener("click",e=>{
+  const el=e.target.closest(".stamp");if(!el)return;
+  const k=el.dataset.key;const today=todayKey();
+  if(!DATA[today])DATA[today]={};
+  const wasEmpty=Object.keys(DATA[today]).length===0;
+  if(DATA[today][k]){delete DATA[today][k];if(!Object.keys(DATA[today]).length)delete DATA[today];}
+  else{DATA[today][k]=true;}
+  saveAll(DATA);refreshStamps();renderLedger();renderCalendar();
+  if(wasEmpty&&DATA[today]&&DATA[today][k])celebrate();
+});
+document.getElementById("undoBtn").addEventListener("click",()=>{
+  delete DATA[todayKey()];saveAll(DATA);refreshStamps();renderLedger();renderCalendar();
+});
+
+function monthRecords(y,m){const p=`${y}-${String(m+1).padStart(2,"0")}-`;return Object.entries(DATA).filter(([k])=>k.startsWith(p));}
+function renderLedger(){
+  const d=new Date(),y=d.getFullYear(),m=d.getMonth();
+  const recs=monthRecords(y,m);const visits=recs.length;
+  const counts={kintore:0,lesson:0,hotyoga:0,pool:0,sauna:0};
+  recs.forEach(([,v])=>KEYS.forEach(k=>{if(v[k])counts[k]++;}));
+  document.getElementById("ledgerMonth").textContent=`${y}年 ${m+1}月`;
+  document.getElementById("monthCount").textContent=visits;
+  document.getElementById("bdKintore").textContent=counts.kintore;
+  document.getElementById("bdLesson").textContent=counts.lesson;
+  document.getElementById("bdHotyoga").textContent=counts.hotyoga;
+  document.getElementById("bdPool").textContent=counts.pool;
+  document.getElementById("bdSauna").textContent=counts.sauna;
+  const up=document.getElementById("unitPrice"),per=document.getElementById("unitPer");
+  if(visits>0){up.textContent=Math.round(FEE/visits).toLocaleString();per.textContent=`今月 ${visits} 回 ÷ 15,840円`;}
+  else{up.textContent="—";per.textContent="まだ記録がありません";}
+}
+
+function renderCalendar(){
+  const g=document.getElementById("calGrid");g.innerHTML="";
+  document.getElementById("calLabel").textContent=`${viewYear}年 ${viewMonth+1}月`;
+  const startDow=new Date(viewYear,viewMonth,1).getDay();
+  const daysIn=new Date(viewYear,viewMonth+1,0).getDate();
+  const today=todayKey();
+  for(let i=0;i<startDow;i++){const c=document.createElement("div");c.className="cell empty";g.appendChild(c);}
+  for(let day=1;day<=daysIn;day++){
+    const ds=`${viewYear}-${String(viewMonth+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    const c=document.createElement("div");c.className="cell";c.dataset.date=ds;
+    const rec=DATA[ds];
+    if(rec){c.classList.add("went");let mk="♨️";if(rec.kintore)mk="💪";else if(rec.lesson)mk="🎵";else if(rec.hotyoga)mk="🧘";else if(rec.pool)mk="🏊";
+      c.innerHTML=`<span class="d">${day}</span><span class="mark">${mk}</span>`;}
+    else{c.innerHTML=`<span class="d">${day}</span><span class="mark"></span>`;}
+    if(ds===today)c.classList.add("today");
+    g.appendChild(c);
+  }
+  const visits=monthRecords(viewYear,viewMonth).length;
+  document.getElementById("calFoot").textContent=visits>0?`この月は ${visits} 回通いました`:"通った日は赤いしるしがつきます";
+}
+document.getElementById("prevM").addEventListener("click",()=>{viewMonth--;if(viewMonth<0){viewMonth=11;viewYear--;}renderCalendar();});
+document.getElementById("nextM").addEventListener("click",()=>{viewMonth++;if(viewMonth>11){viewMonth=0;viewYear++;}renderCalendar();});
+
+/* ---- 過去日付の編集シート ---- */
+const sheet=document.getElementById("sheet");
+const sheetGrid=document.getElementById("sheetGrid");
+let editDate=null;
+const WD=["日","月","火","水","木","金","土"];
+
+document.getElementById("calGrid").addEventListener("click",e=>{
+  const cell=e.target.closest(".cell");
+  if(!cell||cell.classList.contains("empty"))return;
+  openSheet(cell.dataset.date);
+});
+function openSheet(ds){
+  editDate=ds;
+  const [y,m,d]=ds.split("-").map(Number);
+  const wd=WD[new Date(y,m-1,d).getDay()];
+  const isFuture=ds>todayKey();
+  document.getElementById("sheetDate").textContent=`${m}月${d}日（${wd}）`;
+  const rec=DATA[ds]||{};
+  sheetGrid.querySelectorAll(".sheet-stamp").forEach(el=>{
+    el.classList.toggle("on",!!rec[el.dataset.key]);
+  });
+  // 未来日は注意書きだけ変える（記録は可能にしておく）
+  document.querySelector(".sheet-sub").textContent =
+    isFuture ? "未来の日付です。予定として残せます（複数OK）" : "この日にやったことを選んでください（複数OK）";
+  sheet.classList.add("on");
+  const card=document.getElementById("sheetCard");
+  card.style.animation="none";void card.offsetWidth;card.style.animation="";
+}
+function closeSheet(){sheet.classList.remove("on");editDate=null;}
+document.getElementById("sheetClose").addEventListener("click",closeSheet);
+sheet.addEventListener("click",e=>{if(e.target===sheet)closeSheet();});
+sheetGrid.addEventListener("click",e=>{
+  const el=e.target.closest(".sheet-stamp");if(!el||!editDate)return;
+  const k=el.dataset.key;
+  if(!DATA[editDate])DATA[editDate]={};
+  if(DATA[editDate][k]){delete DATA[editDate][k];if(!Object.keys(DATA[editDate]).length)delete DATA[editDate];}
+  else{DATA[editDate][k]=true;}
+  el.classList.toggle("on");
+  saveAll(DATA);refreshStamps();renderLedger();renderCalendar();
+});
+document.getElementById("sheetClear").addEventListener("click",()=>{
+  if(!editDate)return;
+  delete DATA[editDate];saveAll(DATA);
+  sheetGrid.querySelectorAll(".sheet-stamp").forEach(el=>el.classList.remove("on"));
+  refreshStamps();renderLedger();renderCalendar();
+});
+
+/* ---- お祝い ---- */
+const overlay=document.getElementById("celebrate");
+function celebrate(){
+  const[emo,msg,sub]=praiseMsgs[Math.floor(Math.random()*praiseMsgs.length)];
+  document.getElementById("praiseEmoji").textContent=emo;
+  document.getElementById("praiseMsg").textContent=msg;
+  document.getElementById("praiseSub").textContent=sub;
+  const box=document.getElementById("praiseBox");
+  box.style.animation="none";void box.offsetWidth;box.style.animation="";
+  overlay.classList.add("on");confetti();
+}
+document.getElementById("praiseClose").addEventListener("click",()=>overlay.classList.remove("on"));
+overlay.addEventListener("click",e=>{if(e.target===overlay)overlay.classList.remove("on");});
+
+const cv=document.getElementById("fx"),ctx=cv.getContext("2d");
+let parts=[],raf=null;
+function resize(){cv.width=innerWidth;cv.height=innerHeight;}
+addEventListener("resize",resize);resize();
+function confetti(){
+  cv.classList.add("on");parts=[];
+  const colors=["#b01828","#d8202f","#c8a24a","#7d0f1c","#e8a0a0","#e0b85a"];
+  for(let i=0;i<90;i++){parts.push({x:Math.random()*cv.width,y:-20-Math.random()*cv.height*0.3,
+    vx:(Math.random()-0.5)*2.4,vy:2+Math.random()*3.5,sz:6+Math.random()*7,rot:Math.random()*6.28,
+    vr:(Math.random()-0.5)*0.3,color:colors[i%colors.length],kind:"conf"});}
+  for(let i=0;i<5;i++){parts.push({x:Math.random()*cv.width,y:cv.height+40+Math.random()*120,
+    vx:(Math.random()-0.5)*0.6,vy:-(1.1+Math.random()*0.9),sz:24+Math.random()*14,rot:0,vr:0,
+    color:colors[i%colors.length],kind:"balloon",sway:Math.random()*6.28});}
+  if(raf)cancelAnimationFrame(raf);
+  const start=performance.now();
+  (function loop(t){const elapsed=t-start;ctx.clearRect(0,0,cv.width,cv.height);
+    parts.forEach(p=>{
+      if(p.kind==="conf"){p.x+=p.vx;p.y+=p.vy;p.vy+=0.02;p.rot+=p.vr;
+        ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.rot);ctx.fillStyle=p.color;
+        ctx.fillRect(-p.sz/2,-p.sz/4,p.sz,p.sz/2);ctx.restore();}
+      else{p.sway+=0.04;p.x+=p.vx+Math.sin(p.sway)*0.6;p.y+=p.vy;
+        ctx.save();ctx.translate(p.x,p.y);ctx.fillStyle=p.color;
+        ctx.beginPath();ctx.ellipse(0,0,p.sz*0.7,p.sz,0,0,6.28);ctx.fill();
+        ctx.strokeStyle="rgba(125,15,28,.3)";ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(0,p.sz);ctx.lineTo(0,p.sz+22);ctx.stroke();ctx.restore();}
+    });
+    if(elapsed<2600){raf=requestAnimationFrame(loop);}else{ctx.clearRect(0,0,cv.width,cv.height);cv.classList.remove("on");}
+  })(start);
+}
+
+(function boot(){
+  const d=new Date();
+  document.getElementById("todayLabel").textContent=`${d.getMonth()+1}月${d.getDate()}日（${WD[d.getDay()]}）`;
+  refreshStamps();renderLedger();renderCalendar();
+})();
+</script>
+</body>
+</html>
